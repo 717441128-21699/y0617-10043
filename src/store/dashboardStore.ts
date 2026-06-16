@@ -23,6 +23,7 @@ interface DashboardState {
   removeComponent: (id: string) => void;
   removeComponents: (ids: string[]) => void;
   updateComponent: (id: string, updates: Partial<DashboardComponent>) => void;
+  updateComponentWithHistory: (id: string, updates: Partial<DashboardComponent>) => void;
   updateComponentConfig: (id: string, config: Record<string, any>) => void;
   updateComponentDataSource: (id: string, dataSource: Partial<DashboardComponent['dataSource']>) => void;
 
@@ -160,6 +161,18 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         }
       })
     );
+  },
+
+  updateComponentWithHistory: (id, updates) => {
+    set(
+      produce((state: DashboardState) => {
+        const comp = state.dashboard.components.find((c: DashboardComponent) => c.id === id);
+        if (comp) {
+          Object.assign(comp, updates);
+        }
+      })
+    );
+    get().pushHistory();
   },
 
   updateComponentConfig: (id, config) => {
@@ -346,6 +359,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         if (previous) {
           state.history.future.unshift(state.dashboard.components);
           state.dashboard.components = previous;
+          state.selectedIds = [];
         }
       })
     );
@@ -361,6 +375,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         if (next) {
           state.history.past.push(state.dashboard.components);
           state.dashboard.components = next;
+          state.selectedIds = [];
         }
       })
     );

@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { ChartRenderer } from '../charts/ChartRenderer';
 import type { DashboardComponent } from '@/types';
+import { useCanvasScale } from './CanvasContext';
 
 interface ResizeHandleProps {
   position: string;
@@ -38,10 +39,11 @@ interface CanvasItemProps {
 export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected }) => {
   const { selectComponent, updateComponent, resizeComponent, pushHistory, dashboard } =
     useDashboardStore();
+  const { scale } = useCanvasScale();
 
   const isDragging = React.useRef(false);
   const isResizing = React.useRef(false);
-  const startPos = React.useRef({ x: 0, y: 0 });
+  const startMousePos = React.useRef({ x: 0, y: 0 });
   const startComponentPos = React.useRef({ x: 0, y: 0, width: 0, height: 0 });
   const startSelectedPositions = React.useRef<Map<string, { x: number; y: number }>>(new Map());
   const resizeDirection = React.useRef('');
@@ -56,8 +58,13 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
 
     isDragging.current = true;
     hasMoved.current = false;
-    startPos.current = { x: e.clientX, y: e.clientY };
-    startComponentPos.current = { x: component.x, y: component.y, width: component.width, height: component.height };
+    startMousePos.current = { x: e.clientX, y: e.clientY };
+    startComponentPos.current = {
+      x: component.x,
+      y: component.y,
+      width: component.width,
+      height: component.height,
+    };
 
     const { selectedIds } = useDashboardStore.getState();
     const positions = new Map<string, { x: number; y: number }>();
@@ -76,8 +83,13 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
     e.stopPropagation();
     isResizing.current = true;
     resizeDirection.current = direction;
-    startPos.current = { x: e.clientX, y: e.clientY };
-    startComponentPos.current = { x: component.x, y: component.y, width: component.width, height: component.height };
+    startMousePos.current = { x: e.clientX, y: e.clientY };
+    startComponentPos.current = {
+      x: component.x,
+      y: component.y,
+      width: component.width,
+      height: component.height,
+    };
 
     document.addEventListener('mousemove', handleResizeMove);
     document.addEventListener('mouseup', handleResizeEnd);
@@ -86,25 +98,20 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging.current) return;
 
-    const dx = e.clientX - startPos.current.x;
-    const dy = e.clientY - startPos.current.y;
+    const dx = (e.clientX - startMousePos.current.x) / scale;
+    const dy = (e.clientY - startMousePos.current.y) / scale;
 
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+    if (Math.abs(dx) > 2 / scale || Math.abs(dy) > 2 / scale) {
       hasMoved.current = true;
     }
 
     const { selectedIds } = useDashboardStore.getState();
     if (selectedIds.includes(component.id) && selectedIds.length > 1) {
-      const updates: Array<{ id: string; x: number; y: number }> = [];
       startSelectedPositions.current.forEach((pos, id) => {
-        updates.push({
-          id,
+        useDashboardStore.getState().updateComponent(id, {
           x: Math.max(0, pos.x + dx),
           y: Math.max(0, pos.y + dy),
         });
-      });
-      updates.forEach(({ id, x, y }) => {
-        useDashboardStore.getState().updateComponent(id, { x, y });
       });
     } else {
       const newX = Math.max(0, startComponentPos.current.x + dx);
@@ -126,8 +133,8 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
   const handleResizeMove = (e: MouseEvent) => {
     if (!isResizing.current) return;
 
-    const dx = e.clientX - startPos.current.x;
-    const dy = e.clientY - startPos.current.y;
+    const dx = (e.clientX - startMousePos.current.x) / scale;
+    const dy = (e.clientY - startMousePos.current.y) / scale;
     const direction = resizeDirection.current;
 
     let newX = startComponentPos.current.x;

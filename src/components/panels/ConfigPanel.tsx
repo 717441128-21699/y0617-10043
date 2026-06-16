@@ -40,7 +40,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
 };
 
 export const ConfigPanel: React.FC = () => {
-  const { selectedIds, dashboard, updateComponentConfig, updateComponentDataSource, removeComponent, alignComponents, adjustZIndex } =
+  const { selectedIds, dashboard, updateComponentConfig, updateComponentDataSource, removeComponent, alignComponents, adjustZIndex, updateComponentWithHistory } =
     useDashboardStore();
 
   const selectedComponent =
@@ -145,6 +145,11 @@ export const ConfigPanel: React.FC = () => {
                           });
                         }
                       }}
+                      onBlur={() => {
+                        if (selectedComponent) {
+                          useDashboardStore.getState().pushHistory();
+                        }
+                      }}
                       className="w-full px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-cyan-500"
                     />
                   </div>
@@ -158,6 +163,11 @@ export const ConfigPanel: React.FC = () => {
                           useDashboardStore.getState().updateComponent(selectedComponent.id, {
                             height: Number(e.target.value),
                           });
+                        }
+                      }}
+                      onBlur={() => {
+                        if (selectedComponent) {
+                          useDashboardStore.getState().pushHistory();
                         }
                       }}
                       className="w-full px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-cyan-500"

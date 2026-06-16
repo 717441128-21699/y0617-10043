@@ -1,31 +1,44 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { CanvasItem } from './CanvasItem';
+import { CanvasProvider } from './CanvasContext';
 import type { ComponentType } from '@/types';
 import { getComponentMeta } from '@/utils/helpers';
 
 export const Canvas: React.FC = () => {
   const { dashboard, selectedIds, clearSelection, addComponent, multiSelect } = useDashboardStore();
   const canvasRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [scale, setScale] = useState(1);
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const isSelecting = useRef(false);
   const selectionStart = useRef({ x: 0, y: 0 });
 
-  useEffect(() => {
-    const updateScale = () => {
-      if (!canvasRef.current?.parentElement) return;
-      const container = canvasRef.current.parentElement;
-      const scaleX = (container.clientWidth - 40) / dashboard.width;
-      const scaleY = (container.clientHeight - 40) / dashboard.height;
-      setScale(Math.min(scaleX, scaleY, 1));
-    };
+  const updateScale = useCallback(() => {
+    if (!containerRef.current) return;
+    const container = containerRef.current;
+    const padding = 80;
+    const scaleX = (container.clientWidth - padding) / dashboard.width;
+    const scaleY = (container.clientHeight - padding) / dashboard.height;
+    const newScale = Math.min(scaleX, scaleY, 1);
+    setScale(newScale);
+  }, [dashboard.width, dashboard.height]);
 
+  useEffect(() => {
     updateScale();
     window.addEventListener('resize', updateScale);
     return () => window.removeEventListener('resize', updateScale);
-  }, [dashboard.width, dashboard.height]);
+  }, [updateScale]);
+
+  const getCanvasPosition = (e: React.DragEvent | React.MouseEvent | MouseEvent) => {
+    if (!canvasRef.current) return { x: 0, y: 0 };
+    const rect = canvasRef.current.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) / scale,
+      y: (e.clientY - rect.top) / scale,
+    };
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -34,15 +47,6 @@ export const Canvas: React.FC = () => {
 
   const handleDragLeave = () => {
     setIsDragOver(false);
-  };
-
-  const getCanvasPosition = (e: React.DragEvent | React.MouseEvent) => {
-    if (!canvasRef.current) return { x: 0, y: 0 };
-    const rect = canvasRef.current.getBoundingClientRect();
-    return {
-      x: (e.clientX - rect.left) / scale,
-      y: (e.clientY - rect.top) / scale,
-    };
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -64,7 +68,12 @@ export const Canvas: React.FC = () => {
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    if (e.target !== e.currentTarget) return;
+
+    const target = e.target as HTMLElement;
+    const canvasEl = canvasRef.current;
+    if (canvasEl && target !== canvasEl && !canvasEl.isSameNode(target)) {
+      return;
+    }
 
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
       clearSelection();
@@ -82,15 +91,13 @@ export const Canvas: React.FC = () => {
   const handleSelectionMove = (e: MouseEvent) => {
     if (!isSelecting.current || !canvasRef.current) return;
 
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / scale;
-    const y = (e.clientY - rect.top) / scale;
+    const pos = getCanvasPosition(e);
 
     setSelectionBox({
       startX: selectionStart.current.x,
       startY: selectionStart.current.y,
-      endX: x,
-      endY: y,
+      endX: pos.x,
+      endY: pos.y,
     });
   };
 
@@ -102,10 +109,15 @@ export const Canvas: React.FC = () => {
       const top = Math.min(selectionBox.startY, selectionBox.endY);
       const bottom = Math.max(selectionBox.startY, selectionBox.endY);
 
-      if (right - left > 5 && bottom - top > 5) {
+      const boxWidth = right - left;
+      const boxHeight = bottom - top;
+
+      if (boxWidth > 10 && boxHeight > 10) {
         const selected = components
           .filter((c) => {
-            return c.x >= left && c.x + c.width <= right && c.y >= top && c.y + c.height <= bottom;
+            const cx = c.x + c.width / 2;
+            const cy = c.y + c.height / 2;
+            return cx >= left && cx <= right && cy >= top && cy <= bottom;
           })
           .map((c) => c.id);
 
@@ -131,10 +143,10 @@ export const Canvas: React.FC = () => {
     : null;
 
   return (
-    <div className="w-full h-full flex items-center justify-center p-5 overflow-auto bg-slate-950">
+    <div ref={containerRef} className="w-full h-full flex items-center justify-center p-5 overflow-auto bg-slate-950">
       <div
         ref={canvasRef}
-        className={`relative transition-all ${isDragOver ? 'ring-2 ring-cyan-400 ring-offset-2' : ''}`}
+        className={`relative ${isDragOver ? 'ring-2 ring-cyan-400 ring-offset-2' : ''}`}
         style={{
           width: dashboard.width,
           height: dashboard.height,
@@ -146,26 +158,29 @@ export const Canvas: React.FC = () => {
           backgroundSize: '20px 20px',
           boxShadow: '0 0 60px rgba(0, 245, 255, 0.1)',
           border: '1px solid rgba(0, 245, 255, 0.2)',
+          flexShrink: 0,
         }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onMouseDown={handleCanvasMouseDown}
       >
-        {dashboard.components.map((component) => (
-          <CanvasItem
-            key={component.id}
-            component={component}
-            isSelected={selectedIds.includes(component.id)}
-          />
-        ))}
+        <CanvasProvider scale={scale}>
+          {dashboard.components.map((component) => (
+            <CanvasItem
+              key={component.id}
+              component={component}
+              isSelected={selectedIds.includes(component.id)}
+            />
+          ))}
 
-        {selectionBoxStyle && (
-          <div
-            className="absolute pointer-events-none border border-cyan-400 border-dashed bg-cyan-400/10"
-            style={selectionBoxStyle}
-          />
-        )}
+          {selectionBoxStyle && (
+            <div
+              className="absolute pointer-events-none border-2 border-cyan-400 border-dashed bg-cyan-400/10"
+              style={selectionBoxStyle}
+            />
+          )}
+        </CanvasProvider>
       </div>
     </div>
   );

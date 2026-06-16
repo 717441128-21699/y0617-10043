@@ -41,6 +41,8 @@ interface DashboardState {
   undo: () => void;
   redo: () => void;
   pushHistory: () => void;
+  captureSnapshot: () => DashboardComponent[];
+  pushHistorySnapshot: (snapshot: DashboardComponent[]) => void;
   triggerFlush: () => void;
 
   saveDashboard: () => void;
@@ -95,6 +97,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     ),
 
   addComponent: (type, x, y) => {
+    get().pushHistory();
     const zIndex = getMaxZIndex(get().dashboard.components);
     const component = createDefaultComponent(type, x, y, zIndex);
     set(
@@ -103,7 +106,6 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         state.selectedIds = [component.id];
       })
     );
-    get().pushHistory();
   },
 
   duplicateComponents: (ids) => {
@@ -111,7 +113,9 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     const compsToDuplicate = dashboard.components.filter((c) => ids.includes(c.id));
     if (compsToDuplicate.length === 0) return;
 
-    const maxZ = getMaxZIndex(dashboard.components);
+    get().pushHistory();
+
+    const maxZ = getMaxZIndex(get().dashboard.components);
     const newIds: string[] = [];
 
     set(
@@ -130,20 +134,20 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         state.selectedIds = newIds;
       })
     );
-    get().pushHistory();
   },
 
   removeComponent: (id) => {
+    get().pushHistory();
     set(
       produce((state: DashboardState) => {
         state.dashboard.components = state.dashboard.components.filter((c: DashboardComponent) => c.id !== id);
         state.selectedIds = state.selectedIds.filter((sid: string) => sid !== id);
       })
     );
-    get().pushHistory();
   },
 
   removeComponents: (ids) => {
+    get().pushHistory();
     set(
       produce((state: DashboardState) => {
         state.dashboard.components = state.dashboard.components.filter(
@@ -152,7 +156,6 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         state.selectedIds = state.selectedIds.filter((sid: string) => !ids.includes(sid));
       })
     );
-    get().pushHistory();
   },
 
   updateComponent: (id, updates) => {
@@ -202,6 +205,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   },
 
   updateComponentWithHistory: (id, updates) => {
+    get().pushHistory();
     set(
       produce((state: DashboardState) => {
         const comp = state.dashboard.components.find((c: DashboardComponent) => c.id === id);
@@ -210,7 +214,6 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         }
       })
     );
-    get().pushHistory();
   },
 
   updateComponentConfig: (id, config) => {
@@ -284,6 +287,8 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   alignComponents: (ids, type) => {
     if (ids.length < 2) return;
 
+    get().pushHistory();
+
     const { dashboard } = get();
     const comps = dashboard.components.filter((c) => ids.includes(c.id));
 
@@ -341,10 +346,11 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         });
       })
     );
-    get().pushHistory();
   },
 
   adjustZIndex: (id, action) => {
+    get().pushHistory();
+
     const { dashboard } = get();
     const comps = [...dashboard.components].sort((a, b) => a.zIndex - b.zIndex);
     const comp = comps.find((c) => c.id === id);
@@ -382,44 +388,14 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         }
       })
     );
-    get().pushHistory();
   },
 
-  undo: () => {
+  captureSnapshot: () => {
+    return JSON.parse(JSON.stringify(get().dashboard.components));
+  },
+
+  pushHistorySnapshot: (snapshot) => {
     const { history } = get();
-    if (history.past.length === 0) return;
-
-    set(
-      produce((state: DashboardState) => {
-        const previous = state.history.past.pop();
-        if (previous) {
-          state.history.future.unshift(state.dashboard.components);
-          state.dashboard.components = previous;
-          state.selectedIds = [];
-        }
-      })
-    );
-  },
-
-  redo: () => {
-    const { history } = get();
-    if (history.future.length === 0) return;
-
-    set(
-      produce((state: DashboardState) => {
-        const next = state.history.future.shift();
-        if (next) {
-          state.history.past.push(state.dashboard.components);
-          state.dashboard.components = next;
-          state.selectedIds = [];
-        }
-      })
-    );
-  },
-
-  pushHistory: () => {
-    const { dashboard, history } = get();
-    const snapshot = JSON.parse(JSON.stringify(dashboard.components));
 
     if (history.past.length > 0) {
       const last = history.past[history.past.length - 1];
@@ -430,11 +406,74 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 
     set(
       produce((state: DashboardState) => {
-        state.history.past.push(snapshot);
+        state.history.past.push(JSON.parse(JSON.stringify(snapshot)));
         if (state.history.past.length > 50) {
           state.history.past.shift();
         }
         state.history.future = [];
+      })
+    );
+  },
+
+  pushHistory: () => {
+    const snapshot = get().captureSnapshot();
+    get().pushHistorySnapshot(snapshot);
+  },
+
+  undo: () => {
+    const { history, dashboard } = get();
+    if (history.past.length === 0) return;
+
+    const previous = history.past[history.past.length - 1];
+    const current = JSON.parse(JSON.stringify(dashboard.components));
+
+    if (JSON.stringify(previous) === JSON.stringify(current)) {
+      set(
+        produce((state: DashboardState) => {
+          state.history.past.pop();
+        })
+      );
+      if (history.past.length <= 1) return;
+      return get().undo();
+    }
+
+    set(
+      produce((state: DashboardState) => {
+        const prev = state.history.past.pop();
+        if (prev) {
+          state.history.future.unshift(JSON.parse(JSON.stringify(state.dashboard.components)));
+          state.dashboard.components = prev;
+          state.selectedIds = [];
+        }
+      })
+    );
+  },
+
+  redo: () => {
+    const { history, dashboard } = get();
+    if (history.future.length === 0) return;
+
+    const next = history.future[0];
+    const current = JSON.parse(JSON.stringify(dashboard.components));
+
+    if (JSON.stringify(next) === JSON.stringify(current)) {
+      set(
+        produce((state: DashboardState) => {
+          state.history.future.shift();
+        })
+      );
+      if (history.future.length === 0) return;
+      return get().redo();
+    }
+
+    set(
+      produce((state: DashboardState) => {
+        const nxt = state.history.future.shift();
+        if (nxt) {
+          state.history.past.push(JSON.parse(JSON.stringify(state.dashboard.components)));
+          state.dashboard.components = nxt;
+          state.selectedIds = [];
+        }
       })
     );
   },

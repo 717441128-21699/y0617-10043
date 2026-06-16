@@ -48,6 +48,20 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onPreview }) => {
   const [dashboardName, setDashboardName] = useState(dashboard.name);
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
 
+  const handleUndo = () => {
+    triggerFlush();
+    setTimeout(() => {
+      useDashboardStore.getState().undo();
+    }, 0);
+  };
+
+  const handleRedo = () => {
+    triggerFlush();
+    setTimeout(() => {
+      useDashboardStore.getState().redo();
+    }, 0);
+  };
+
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
 
@@ -175,7 +189,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onPreview }) => {
 
         <div className="flex items-center gap-1">
           <button
-            onClick={undo}
+            onClick={handleUndo}
             disabled={!canUndo}
             className={`p-2 rounded-md transition-colors ${
               canUndo ? 'hover:bg-slate-800 text-slate-300' : 'text-slate-600 cursor-not-allowed'
@@ -186,7 +200,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onPreview }) => {
           </button>
 
           <button
-            onClick={redo}
+            onClick={handleRedo}
             disabled={!canRedo}
             className={`p-2 rounded-md transition-colors ${
               canRedo ? 'hover:bg-slate-800 text-slate-300' : 'text-slate-600 cursor-not-allowed'

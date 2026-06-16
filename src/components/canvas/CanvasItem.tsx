@@ -37,7 +37,7 @@ interface CanvasItemProps {
 }
 
 export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected }) => {
-  const { selectComponent, updateComponent, resizeComponent, pushHistory, dashboard } =
+  const { selectComponent, updateComponent, resizeComponent, pushHistorySnapshot, captureSnapshot, dashboard } =
     useDashboardStore();
   const { scale } = useCanvasScale();
 
@@ -48,6 +48,7 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
   const startSelectedPositions = React.useRef<Map<string, { x: number; y: number }>>(new Map());
   const resizeDirection = React.useRef('');
   const hasMoved = React.useRef(false);
+  const snapshotBeforeDrag = React.useRef<DashboardComponent[] | null>(null);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
@@ -72,6 +73,7 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
       width: component.width,
       height: component.height,
     };
+    snapshotBeforeDrag.current = captureSnapshot();
 
     const positions = new Map<string, { x: number; y: number }>();
     dashboard.components.forEach((comp) => {
@@ -96,6 +98,7 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
       width: component.width,
       height: component.height,
     };
+    snapshotBeforeDrag.current = captureSnapshot();
 
     document.addEventListener('mousemove', handleResizeMove);
     document.addEventListener('mouseup', handleResizeEnd);
@@ -127,11 +130,12 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
   };
 
   const handleMouseUp = () => {
-    if (isDragging.current && hasMoved.current) {
-      pushHistory();
+    if (isDragging.current && hasMoved.current && snapshotBeforeDrag.current) {
+      pushHistorySnapshot(snapshotBeforeDrag.current);
     }
     isDragging.current = false;
     hasMoved.current = false;
+    snapshotBeforeDrag.current = null;
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
   };
@@ -170,8 +174,11 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
   };
 
   const handleResizeEnd = () => {
+    if (isResizing.current && snapshotBeforeDrag.current) {
+      pushHistorySnapshot(snapshotBeforeDrag.current);
+    }
     isResizing.current = false;
-    pushHistory();
+    snapshotBeforeDrag.current = null;
     document.removeEventListener('mousemove', handleResizeMove);
     document.removeEventListener('mouseup', handleResizeEnd);
   };

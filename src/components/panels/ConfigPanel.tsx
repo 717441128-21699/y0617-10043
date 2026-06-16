@@ -47,6 +47,7 @@ export const ConfigPanel: React.FC = () => {
   const [localTitle, setLocalTitle] = useState<string>('');
   const [localUrl, setLocalUrl] = useState<string>('');
   const [localParams, setLocalParams] = useState<string>('');
+  const [localRefreshInterval, setLocalRefreshInterval] = useState<string>('');
 
   const selectedComponent =
     selectedIds.length === 1
@@ -60,6 +61,7 @@ export const ConfigPanel: React.FC = () => {
       setLocalTitle(selectedComponent.config.title || '');
       setLocalUrl(selectedComponent.dataSource.url || '');
       setLocalParams(JSON.stringify(selectedComponent.dataSource.params || {}, null, 2));
+      setLocalRefreshInterval(String(selectedComponent.dataSource.refreshInterval || 0));
     }
   }, [selectedComponent?.id]);
 
@@ -69,41 +71,73 @@ export const ConfigPanel: React.FC = () => {
     let changed = false;
 
     if (localTitle !== selectedComponent.config.title) {
-      updateComponentConfig(selectedComponent.id, { title: localTitle });
       changed = true;
     }
 
     const w = Number(localWidth);
     if (!isNaN(w) && w > 0 && w !== selectedComponent.width) {
-      updateComponent(selectedComponent.id, { width: w });
       changed = true;
     }
 
     const h = Number(localHeight);
     if (!isNaN(h) && h > 0 && h !== selectedComponent.height) {
-      updateComponent(selectedComponent.id, { height: h });
       changed = true;
     }
 
     if (localUrl !== selectedComponent.dataSource.url) {
-      updateComponentDataSource(selectedComponent.id, { url: localUrl });
       changed = true;
     }
 
+    const ri = Number(localRefreshInterval);
+    if (!isNaN(ri) && ri >= 0 && ri !== selectedComponent.dataSource.refreshInterval) {
+      changed = true;
+    }
+
+    let paramsChanged = false;
     try {
       const params = JSON.parse(localParams || '{}');
       const oldParamsStr = JSON.stringify(selectedComponent.dataSource.params || {});
       const newParamsStr = JSON.stringify(params);
       if (oldParamsStr !== newParamsStr) {
-        updateComponentDataSource(selectedComponent.id, { params });
+        paramsChanged = true;
         changed = true;
       }
     } catch {}
 
     if (changed) {
       pushHistory();
+
+      if (localTitle !== selectedComponent.config.title) {
+        updateComponentConfig(selectedComponent.id, { title: localTitle });
+      }
+
+      const w2 = Number(localWidth);
+      if (!isNaN(w2) && w2 > 0 && w2 !== selectedComponent.width) {
+        updateComponent(selectedComponent.id, { width: w2 });
+      }
+
+      const h2 = Number(localHeight);
+      if (!isNaN(h2) && h2 > 0 && h2 !== selectedComponent.height) {
+        updateComponent(selectedComponent.id, { height: h2 });
+      }
+
+      if (localUrl !== selectedComponent.dataSource.url) {
+        updateComponentDataSource(selectedComponent.id, { url: localUrl });
+      }
+
+      const ri2 = Number(localRefreshInterval);
+      if (!isNaN(ri2) && ri2 >= 0 && ri2 !== selectedComponent.dataSource.refreshInterval) {
+        updateComponentDataSource(selectedComponent.id, { refreshInterval: ri2 });
+      }
+
+      if (paramsChanged) {
+        try {
+          const params = JSON.parse(localParams || '{}');
+          updateComponentDataSource(selectedComponent.id, { params });
+        } catch {}
+      }
     }
-  }, [selectedComponent, localTitle, localWidth, localHeight, localUrl, localParams, updateComponentConfig, updateComponent, updateComponentDataSource, pushHistory]);
+  }, [selectedComponent, localTitle, localWidth, localHeight, localUrl, localRefreshInterval, localParams, updateComponentConfig, updateComponent, updateComponentDataSource, pushHistory]);
 
   React.useEffect(() => {
     if (flushPending > 0) {
@@ -195,8 +229,8 @@ export const ConfigPanel: React.FC = () => {
                     onBlur={() => {
                       if (!selectedComponent) return;
                       if (localTitle !== selectedComponent.config.title) {
-                        updateComponentConfig(selectedComponent.id, { title: localTitle });
                         pushHistory();
+                        updateComponentConfig(selectedComponent.id, { title: localTitle });
                       }
                     }}
                     onKeyDown={(e) => {
@@ -218,8 +252,8 @@ export const ConfigPanel: React.FC = () => {
                         if (!selectedComponent) return;
                         const w = Number(localWidth);
                         if (!isNaN(w) && w > 0) {
-                          updateComponent(selectedComponent.id, { width: w });
                           pushHistory();
+                          updateComponent(selectedComponent.id, { width: w });
                         } else {
                           setLocalWidth(String(selectedComponent.width));
                         }
@@ -243,8 +277,8 @@ export const ConfigPanel: React.FC = () => {
                         if (!selectedComponent) return;
                         const h = Number(localHeight);
                         if (!isNaN(h) && h > 0) {
-                          updateComponent(selectedComponent.id, { height: h });
                           pushHistory();
+                          updateComponent(selectedComponent.id, { height: h });
                         } else {
                           setLocalHeight(String(selectedComponent.height));
                         }
@@ -270,8 +304,8 @@ export const ConfigPanel: React.FC = () => {
                     value={selectedComponent?.dataSource.method || 'GET'}
                     onChange={(e) => {
                       if (selectedComponent) {
-                        updateComponentDataSource(selectedComponent.id, { method: e.target.value as 'GET' | 'POST' });
                         pushHistory();
+                        updateComponentDataSource(selectedComponent.id, { method: e.target.value as 'GET' | 'POST' });
                       }
                     }}
                     className="w-full px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -289,8 +323,8 @@ export const ConfigPanel: React.FC = () => {
                     onBlur={() => {
                       if (!selectedComponent) return;
                       if (localUrl !== selectedComponent.dataSource.url) {
-                        updateComponentDataSource(selectedComponent.id, { url: localUrl });
                         pushHistory();
+                        updateComponentDataSource(selectedComponent.id, { url: localUrl });
                       }
                     }}
                     onKeyDown={(e) => {
@@ -306,13 +340,25 @@ export const ConfigPanel: React.FC = () => {
                   <label className="block text-xs text-slate-400 mb-1">刷新间隔（秒）</label>
                   <input
                     type="number"
-                    value={selectedComponent?.dataSource.refreshInterval || 0}
-                    onChange={(e) => {
-                      if (selectedComponent) {
-                        updateComponentDataSource(selectedComponent.id, { refreshInterval: Number(e.target.value) });
+                    value={localRefreshInterval}
+                    onChange={(e) => setLocalRefreshInterval(e.target.value)}
+                    onBlur={() => {
+                      if (!selectedComponent) return;
+                      const ri = Number(localRefreshInterval);
+                      if (!isNaN(ri) && ri >= 0) {
+                        if (ri !== selectedComponent.dataSource.refreshInterval) {
+                          pushHistory();
+                          updateComponentDataSource(selectedComponent.id, { refreshInterval: ri });
+                        }
+                      } else {
+                        setLocalRefreshInterval(String(selectedComponent.dataSource.refreshInterval || 0));
                       }
                     }}
-                    onBlur={() => pushHistory()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
                     min={0}
                     placeholder="0 表示不刷新"
                     className="w-full px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -328,8 +374,12 @@ export const ConfigPanel: React.FC = () => {
                       if (!selectedComponent) return;
                       try {
                         const params = JSON.parse(localParams || '{}');
-                        updateComponentDataSource(selectedComponent.id, { params });
-                        pushHistory();
+                        const oldParamsStr = JSON.stringify(selectedComponent.dataSource.params || {});
+                        const newParamsStr = JSON.stringify(params);
+                        if (oldParamsStr !== newParamsStr) {
+                          pushHistory();
+                          updateComponentDataSource(selectedComponent.id, { params });
+                        }
                       } catch {
                         setLocalParams(JSON.stringify(selectedComponent.dataSource.params || {}, null, 2));
                       }

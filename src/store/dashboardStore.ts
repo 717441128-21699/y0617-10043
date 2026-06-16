@@ -14,6 +14,7 @@ interface DashboardState {
   selectedIds: string[];
   history: HistoryState;
   isPreview: boolean;
+  flushPending: number;
 
   setDashboard: (dashboard: Dashboard) => void;
   updateDashboardConfig: (config: Partial<Dashboard>) => void;
@@ -40,6 +41,7 @@ interface DashboardState {
   undo: () => void;
   redo: () => void;
   pushHistory: () => void;
+  triggerFlush: () => void;
 
   saveDashboard: () => void;
   loadDashboard: (id: string) => void;
@@ -57,7 +59,7 @@ const createInitialDashboard = (): Dashboard => ({
   updatedAt: Date.now(),
 });
 
-const getInitialState = (): { dashboard: Dashboard; selectedIds: string[]; history: HistoryState; isPreview: boolean } => {
+const getInitialState = (): { dashboard: Dashboard; selectedIds: string[]; history: HistoryState; isPreview: boolean; flushPending: number } => {
   const savedId = storage.getCurrentDashboardId();
   let dashboard = createInitialDashboard();
 
@@ -76,6 +78,7 @@ const getInitialState = (): { dashboard: Dashboard; selectedIds: string[]; histo
       future: [],
     },
     isPreview: false,
+    flushPending: 0,
   };
 };
 
@@ -158,20 +161,40 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         const comp = state.dashboard.components.find((c: DashboardComponent) => c.id === id);
         if (comp) {
           const safeUpdates: Partial<DashboardComponent> = { ...updates };
+          const newWidth = safeUpdates.width !== undefined ? safeUpdates.width : comp.width;
+          const newHeight = safeUpdates.height !== undefined ? safeUpdates.height : comp.height;
+
           if (safeUpdates.width !== undefined) {
             safeUpdates.width = Math.max(100, Math.min(safeUpdates.width, state.dashboard.width));
           }
           if (safeUpdates.height !== undefined) {
             safeUpdates.height = Math.max(60, Math.min(safeUpdates.height, state.dashboard.height));
           }
+
+          const finalWidth = safeUpdates.width !== undefined ? safeUpdates.width : newWidth;
+          const finalHeight = safeUpdates.height !== undefined ? safeUpdates.height : newHeight;
+
+          const maxX = state.dashboard.width - finalWidth;
+          const maxY = state.dashboard.height - finalHeight;
+
           if (safeUpdates.x !== undefined) {
-            const maxX = state.dashboard.width - (comp.width);
             safeUpdates.x = Math.max(0, Math.min(safeUpdates.x, maxX));
+          } else if (safeUpdates.width !== undefined) {
+            const autoX = Math.min(comp.x, maxX);
+            if (autoX !== comp.x) {
+              safeUpdates.x = Math.max(0, autoX);
+            }
           }
+
           if (safeUpdates.y !== undefined) {
-            const maxY = state.dashboard.height - (comp.height);
             safeUpdates.y = Math.max(0, Math.min(safeUpdates.y, maxY));
+          } else if (safeUpdates.height !== undefined) {
+            const autoY = Math.min(comp.y, maxY);
+            if (autoY !== comp.y) {
+              safeUpdates.y = Math.max(0, autoY);
+            }
           }
+
           Object.assign(comp, safeUpdates);
         }
       })
@@ -398,6 +421,13 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     const { dashboard, history } = get();
     const snapshot = JSON.parse(JSON.stringify(dashboard.components));
 
+    if (history.past.length > 0) {
+      const last = history.past[history.past.length - 1];
+      if (JSON.stringify(last) === JSON.stringify(snapshot)) {
+        return;
+      }
+    }
+
     set(
       produce((state: DashboardState) => {
         state.history.past.push(snapshot);
@@ -405,6 +435,14 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
           state.history.past.shift();
         }
         state.history.future = [];
+      })
+    );
+  },
+
+  triggerFlush: () => {
+    set(
+      produce((state: DashboardState) => {
+        state.flushPending = (state.flushPending || 0) + 1;
       })
     );
   },
@@ -422,6 +460,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         dashboard,
         selectedIds: [],
         history: { past: [], future: [] },
+        flushPending: 0,
       });
       storage.setCurrentDashboardId(id);
     }
@@ -433,6 +472,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       dashboard,
       selectedIds: [],
       history: { past: [], future: [] },
+      flushPending: 0,
     });
     storage.setCurrentDashboardId(dashboard.id);
   },

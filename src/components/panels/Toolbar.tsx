@@ -39,6 +39,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onPreview }) => {
     removeComponents,
     duplicateComponents,
     updateDashboardConfig,
+    triggerFlush,
   } = useDashboardStore();
 
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -51,27 +52,56 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onPreview }) => {
   const canRedo = history.future.length > 0;
 
   const handleSave = () => {
-    setDashboardName(dashboard.name);
-    setShowSaveModal(true);
+    triggerFlush();
+    setTimeout(() => {
+      setDashboardName(useDashboardStore.getState().dashboard.name);
+      setShowSaveModal(true);
+    }, 0);
   };
 
   const confirmSave = () => {
-    updateDashboardConfig({ name: dashboardName });
+    triggerFlush();
     setTimeout(() => {
-      saveDashboard();
-      setShowSaveModal(false);
-      alert('保存成功！');
+      updateDashboardConfig({ name: dashboardName });
+      setTimeout(() => {
+        saveDashboard();
+        setShowSaveModal(false);
+        alert('保存成功！');
+      }, 0);
     }, 0);
   };
 
   const handleLoad = () => {
-    setDashboards(storage.getDashboards());
-    setShowLoadModal(true);
+    triggerFlush();
+    setTimeout(() => {
+      setDashboards(storage.getDashboards());
+      setShowLoadModal(true);
+    }, 0);
+  };
+
+  const handleNew = () => {
+    triggerFlush();
+    setTimeout(() => {
+      if (confirm('创建新方案将丢失当前未保存的更改，确定继续吗？')) {
+        newDashboard();
+      }
+    }, 0);
+  };
+
+  const handleEmbed = () => {
+    triggerFlush();
+    setTimeout(() => {
+      saveDashboard();
+      setShowEmbedModal(true);
+    }, 0);
   };
 
   const handleLoadDashboard = (id: string) => {
-    loadDashboard(id);
-    setShowLoadModal(false);
+    triggerFlush();
+    setTimeout(() => {
+      loadDashboard(id);
+      setShowLoadModal(false);
+    }, 0);
   };
 
   const handleDeleteDashboard = (id: string, e: React.MouseEvent) => {
@@ -80,17 +110,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onPreview }) => {
       storage.deleteDashboard(id);
       setDashboards(storage.getDashboards());
     }
-  };
-
-  const handleNew = () => {
-    if (confirm('创建新方案将丢失当前未保存的更改，确定继续吗？')) {
-      newDashboard();
-    }
-  };
-
-  const handleEmbed = () => {
-    saveDashboard();
-    setShowEmbedModal(true);
   };
 
   const embedCode = `<iframe src="${window.location.origin}/embed/${dashboard.id}" width="${dashboard.width}" height="${dashboard.height}" frameborder="0" allowfullscreen></iframe>`;

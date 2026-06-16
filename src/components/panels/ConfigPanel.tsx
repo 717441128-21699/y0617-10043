@@ -40,7 +40,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
 };
 
 export const ConfigPanel: React.FC = () => {
-  const { selectedIds, dashboard, updateComponentConfig, updateComponentDataSource, removeComponent, alignComponents, adjustZIndex, updateComponent, pushHistory } =
+  const { selectedIds, dashboard, updateComponentConfig, updateComponentDataSource, removeComponent, alignComponents, adjustZIndex, updateComponent, pushHistory, flushPending } =
     useDashboardStore();
   const [localWidth, setLocalWidth] = useState<string>('');
   const [localHeight, setLocalHeight] = useState<string>('');
@@ -62,6 +62,54 @@ export const ConfigPanel: React.FC = () => {
       setLocalParams(JSON.stringify(selectedComponent.dataSource.params || {}, null, 2));
     }
   }, [selectedComponent?.id]);
+
+  const commitAll = React.useCallback(() => {
+    if (!selectedComponent) return;
+
+    let changed = false;
+
+    if (localTitle !== selectedComponent.config.title) {
+      updateComponentConfig(selectedComponent.id, { title: localTitle });
+      changed = true;
+    }
+
+    const w = Number(localWidth);
+    if (!isNaN(w) && w > 0 && w !== selectedComponent.width) {
+      updateComponent(selectedComponent.id, { width: w });
+      changed = true;
+    }
+
+    const h = Number(localHeight);
+    if (!isNaN(h) && h > 0 && h !== selectedComponent.height) {
+      updateComponent(selectedComponent.id, { height: h });
+      changed = true;
+    }
+
+    if (localUrl !== selectedComponent.dataSource.url) {
+      updateComponentDataSource(selectedComponent.id, { url: localUrl });
+      changed = true;
+    }
+
+    try {
+      const params = JSON.parse(localParams || '{}');
+      const oldParamsStr = JSON.stringify(selectedComponent.dataSource.params || {});
+      const newParamsStr = JSON.stringify(params);
+      if (oldParamsStr !== newParamsStr) {
+        updateComponentDataSource(selectedComponent.id, { params });
+        changed = true;
+      }
+    } catch {}
+
+    if (changed) {
+      pushHistory();
+    }
+  }, [selectedComponent, localTitle, localWidth, localHeight, localUrl, localParams, updateComponentConfig, updateComponent, updateComponentDataSource, pushHistory]);
+
+  React.useEffect(() => {
+    if (flushPending > 0) {
+      commitAll();
+    }
+  }, [flushPending, commitAll]);
 
   if (selectedIds.length === 0) {
     return (

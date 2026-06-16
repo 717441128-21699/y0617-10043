@@ -40,13 +40,28 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
 };
 
 export const ConfigPanel: React.FC = () => {
-  const { selectedIds, dashboard, updateComponentConfig, updateComponentDataSource, removeComponent, alignComponents, adjustZIndex, updateComponentWithHistory } =
+  const { selectedIds, dashboard, updateComponentConfig, updateComponentDataSource, removeComponent, alignComponents, adjustZIndex, updateComponent, pushHistory } =
     useDashboardStore();
+  const [localWidth, setLocalWidth] = useState<string>('');
+  const [localHeight, setLocalHeight] = useState<string>('');
+  const [localTitle, setLocalTitle] = useState<string>('');
+  const [localUrl, setLocalUrl] = useState<string>('');
+  const [localParams, setLocalParams] = useState<string>('');
 
   const selectedComponent =
     selectedIds.length === 1
       ? dashboard.components.find((c) => c.id === selectedIds[0])
       : null;
+
+  React.useEffect(() => {
+    if (selectedComponent) {
+      setLocalWidth(String(selectedComponent.width));
+      setLocalHeight(String(selectedComponent.height));
+      setLocalTitle(selectedComponent.config.title || '');
+      setLocalUrl(selectedComponent.dataSource.url || '');
+      setLocalParams(JSON.stringify(selectedComponent.dataSource.params || {}, null, 2));
+    }
+  }, [selectedComponent?.id]);
 
   if (selectedIds.length === 0) {
     return (
@@ -127,8 +142,20 @@ export const ConfigPanel: React.FC = () => {
                   <label className="block text-xs text-slate-400 mb-1">标题</label>
                   <input
                     type="text"
-                    value={selectedComponent?.config.title || ''}
-                    onChange={(e) => handleConfigChange('title', e.target.value)}
+                    value={localTitle}
+                    onChange={(e) => setLocalTitle(e.target.value)}
+                    onBlur={() => {
+                      if (!selectedComponent) return;
+                      if (localTitle !== selectedComponent.config.title) {
+                        updateComponentConfig(selectedComponent.id, { title: localTitle });
+                        pushHistory();
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
                     className="w-full px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
                   />
                 </div>
@@ -137,19 +164,24 @@ export const ConfigPanel: React.FC = () => {
                     <label className="block text-xs text-slate-400 mb-1">宽度</label>
                     <input
                       type="number"
-                      value={selectedComponent?.width || 0}
-                      onChange={(e) => {
-                        if (selectedComponent) {
-                          useDashboardStore.getState().updateComponent(selectedComponent.id, {
-                            width: Number(e.target.value),
-                          });
-                        }
-                      }}
+                      value={localWidth}
+                      onChange={(e) => setLocalWidth(e.target.value)}
                       onBlur={() => {
-                        if (selectedComponent) {
-                          useDashboardStore.getState().pushHistory();
+                        if (!selectedComponent) return;
+                        const w = Number(localWidth);
+                        if (!isNaN(w) && w > 0) {
+                          updateComponent(selectedComponent.id, { width: w });
+                          pushHistory();
+                        } else {
+                          setLocalWidth(String(selectedComponent.width));
                         }
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      min={100}
                       className="w-full px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-cyan-500"
                     />
                   </div>
@@ -157,19 +189,24 @@ export const ConfigPanel: React.FC = () => {
                     <label className="block text-xs text-slate-400 mb-1">高度</label>
                     <input
                       type="number"
-                      value={selectedComponent?.height || 0}
-                      onChange={(e) => {
-                        if (selectedComponent) {
-                          useDashboardStore.getState().updateComponent(selectedComponent.id, {
-                            height: Number(e.target.value),
-                          });
-                        }
-                      }}
+                      value={localHeight}
+                      onChange={(e) => setLocalHeight(e.target.value)}
                       onBlur={() => {
-                        if (selectedComponent) {
-                          useDashboardStore.getState().pushHistory();
+                        if (!selectedComponent) return;
+                        const h = Number(localHeight);
+                        if (!isNaN(h) && h > 0) {
+                          updateComponent(selectedComponent.id, { height: h });
+                          pushHistory();
+                        } else {
+                          setLocalHeight(String(selectedComponent.height));
                         }
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      min={60}
                       className="w-full px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-cyan-500"
                     />
                   </div>
@@ -183,7 +220,12 @@ export const ConfigPanel: React.FC = () => {
                   <label className="block text-xs text-slate-400 mb-1">请求方式</label>
                   <select
                     value={selectedComponent?.dataSource.method || 'GET'}
-                    onChange={(e) => handleDataSourceChange('method', e.target.value)}
+                    onChange={(e) => {
+                      if (selectedComponent) {
+                        updateComponentDataSource(selectedComponent.id, { method: e.target.value as 'GET' | 'POST' });
+                        pushHistory();
+                      }
+                    }}
                     className="w-full px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-cyan-500"
                   >
                     <option value="GET">GET</option>
@@ -194,8 +236,20 @@ export const ConfigPanel: React.FC = () => {
                   <label className="block text-xs text-slate-400 mb-1">API 地址</label>
                   <input
                     type="text"
-                    value={selectedComponent?.dataSource.url || ''}
-                    onChange={(e) => handleDataSourceChange('url', e.target.value)}
+                    value={localUrl}
+                    onChange={(e) => setLocalUrl(e.target.value)}
+                    onBlur={() => {
+                      if (!selectedComponent) return;
+                      if (localUrl !== selectedComponent.dataSource.url) {
+                        updateComponentDataSource(selectedComponent.id, { url: localUrl });
+                        pushHistory();
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        (e.target as HTMLInputElement).blur();
+                      }
+                    }}
                     placeholder="https://api.example.com/data"
                     className="w-full px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
                   />
@@ -205,7 +259,12 @@ export const ConfigPanel: React.FC = () => {
                   <input
                     type="number"
                     value={selectedComponent?.dataSource.refreshInterval || 0}
-                    onChange={(e) => handleDataSourceChange('refreshInterval', Number(e.target.value))}
+                    onChange={(e) => {
+                      if (selectedComponent) {
+                        updateComponentDataSource(selectedComponent.id, { refreshInterval: Number(e.target.value) });
+                      }
+                    }}
+                    onBlur={() => pushHistory()}
                     min={0}
                     placeholder="0 表示不刷新"
                     className="w-full px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded text-slate-200 focus:outline-none focus:border-cyan-500"
@@ -215,12 +274,17 @@ export const ConfigPanel: React.FC = () => {
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">请求参数 (JSON)</label>
                   <textarea
-                    value={JSON.stringify(selectedComponent?.dataSource.params || {}, null, 2)}
-                    onChange={(e) => {
+                    value={localParams}
+                    onChange={(e) => setLocalParams(e.target.value)}
+                    onBlur={() => {
+                      if (!selectedComponent) return;
                       try {
-                        const params = JSON.parse(e.target.value);
-                        handleDataSourceChange('params', params);
-                      } catch {}
+                        const params = JSON.parse(localParams || '{}');
+                        updateComponentDataSource(selectedComponent.id, { params });
+                        pushHistory();
+                      } catch {
+                        setLocalParams(JSON.stringify(selectedComponent.dataSource.params || {}, null, 2));
+                      }
                     }}
                     rows={4}
                     className="w-full px-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded text-slate-200 font-mono focus:outline-none focus:border-cyan-500"

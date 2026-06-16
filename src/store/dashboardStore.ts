@@ -157,7 +157,22 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       produce((state: DashboardState) => {
         const comp = state.dashboard.components.find((c: DashboardComponent) => c.id === id);
         if (comp) {
-          Object.assign(comp, updates);
+          const safeUpdates: Partial<DashboardComponent> = { ...updates };
+          if (safeUpdates.width !== undefined) {
+            safeUpdates.width = Math.max(100, Math.min(safeUpdates.width, state.dashboard.width));
+          }
+          if (safeUpdates.height !== undefined) {
+            safeUpdates.height = Math.max(60, Math.min(safeUpdates.height, state.dashboard.height));
+          }
+          if (safeUpdates.x !== undefined) {
+            const maxX = state.dashboard.width - (comp.width);
+            safeUpdates.x = Math.max(0, Math.min(safeUpdates.x, maxX));
+          }
+          if (safeUpdates.y !== undefined) {
+            const maxY = state.dashboard.height - (comp.height);
+            safeUpdates.y = Math.max(0, Math.min(safeUpdates.y, maxY));
+          }
+          Object.assign(comp, safeUpdates);
         }
       })
     );
@@ -184,7 +199,6 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         }
       })
     );
-    get().pushHistory();
   },
 
   updateComponentDataSource: (id, dataSource) => {
@@ -196,7 +210,6 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         }
       })
     );
-    get().pushHistory();
   },
 
   selectComponent: (id, multi = false) => {

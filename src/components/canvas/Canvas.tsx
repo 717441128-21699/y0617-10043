@@ -14,6 +14,7 @@ export const Canvas: React.FC = () => {
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
   const isSelecting = useRef(false);
   const selectionStart = useRef({ x: 0, y: 0 });
+  const selectionCurrent = useRef({ x: 0, y: 0 });
 
   const updateScale = useCallback(() => {
     if (!containerRef.current) return;
@@ -68,12 +69,7 @@ export const Canvas: React.FC = () => {
 
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
-
-    const target = e.target as HTMLElement;
-    const canvasEl = canvasRef.current;
-    if (canvasEl && target !== canvasEl && !canvasEl.isSameNode(target)) {
-      return;
-    }
+    if (e.target !== e.currentTarget) return;
 
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
       clearSelection();
@@ -82,6 +78,7 @@ export const Canvas: React.FC = () => {
     isSelecting.current = true;
     const pos = getCanvasPosition(e);
     selectionStart.current = pos;
+    selectionCurrent.current = pos;
     setSelectionBox({ startX: pos.x, startY: pos.y, endX: pos.x, endY: pos.y });
 
     document.addEventListener('mousemove', handleSelectionMove);
@@ -92,6 +89,7 @@ export const Canvas: React.FC = () => {
     if (!isSelecting.current || !canvasRef.current) return;
 
     const pos = getCanvasPosition(e);
+    selectionCurrent.current = pos;
 
     setSelectionBox({
       startX: selectionStart.current.x,
@@ -102,17 +100,22 @@ export const Canvas: React.FC = () => {
   };
 
   const handleSelectionEnd = () => {
-    if (selectionBox) {
-      const { components } = useDashboardStore.getState().dashboard;
-      const left = Math.min(selectionBox.startX, selectionBox.endX);
-      const right = Math.max(selectionBox.startX, selectionBox.endX);
-      const top = Math.min(selectionBox.startY, selectionBox.endY);
-      const bottom = Math.max(selectionBox.startY, selectionBox.endY);
+    if (isSelecting.current) {
+      const startX = selectionStart.current.x;
+      const startY = selectionStart.current.y;
+      const endX = selectionCurrent.current.x;
+      const endY = selectionCurrent.current.y;
+
+      const left = Math.min(startX, endX);
+      const right = Math.max(startX, endX);
+      const top = Math.min(startY, endY);
+      const bottom = Math.max(startY, endY);
 
       const boxWidth = right - left;
       const boxHeight = bottom - top;
 
-      if (boxWidth > 10 && boxHeight > 10) {
+      if (boxWidth > 5 && boxHeight > 5) {
+        const { components } = useDashboardStore.getState().dashboard;
         const selected = components
           .filter((c) => {
             const cx = c.x + c.width / 2;

@@ -54,7 +54,14 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
     e.stopPropagation();
 
     const multi = e.ctrlKey || e.metaKey;
-    selectComponent(component.id, multi);
+    const { selectedIds } = useDashboardStore.getState();
+    const isAlreadySelected = selectedIds.includes(component.id);
+
+    if (multi || !isAlreadySelected) {
+      selectComponent(component.id, multi);
+    }
+
+    const currentSelectedIds = useDashboardStore.getState().selectedIds;
 
     isDragging.current = true;
     hasMoved.current = false;
@@ -66,10 +73,9 @@ export const CanvasItem: React.FC<CanvasItemProps> = ({ component, isSelected })
       height: component.height,
     };
 
-    const { selectedIds } = useDashboardStore.getState();
     const positions = new Map<string, { x: number; y: number }>();
     dashboard.components.forEach((comp) => {
-      if (selectedIds.includes(comp.id)) {
+      if (currentSelectedIds.includes(comp.id)) {
         positions.set(comp.id, { x: comp.x, y: comp.y });
       }
     });
